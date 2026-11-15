@@ -112,9 +112,33 @@
   li .t { color: #7b8794; white-space: nowrap; }
   .empty { font-size: 14px; color: #7b8794; }
   .missing { padding: 20px; background: #fff; border-radius: 12px; }
+  .pop {
+    display: none; position: fixed; left: 50%; top: 14px; transform: translateX(-50%);
+    width: calc(100% - 24px); max-width: 520px; background: #fff; border: 3px solid #c81e1e;
+    border-radius: 14px; padding: 16px; z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,.18);
+  }
+  .pop.on { display: block; }
+  .pop .ph { display: flex; gap: 12px; align-items: flex-start; }
+  .pop .ic {
+    width: 40px; height: 40px; border-radius: 50%; background: #c81e1e; color: #fff; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700;
+  }
+  .pop .pt { font-size: 19px; font-weight: 600; color: #9b1c1c; margin-bottom: 4px; }
+  .pop .pb { font-size: 15px; line-height: 1.5; color: #3e1a1a; }
+  .pop button {
+    margin-top: 14px; width: 100%; padding: 12px; border-radius: 10px; border: none;
+    background: #c81e1e; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  }
 </style>
 </head>
 <body>
+<div class="pop" id="pop" role="alert" aria-live="assertive">
+  <div class="ph">
+    <div class="ic" aria-hidden="true">!</div>
+    <div><div class="pt" id="popTitle">That tap didn't save</div><div class="pb" id="popMsg"></div></div>
+  </div>
+  <button id="popOk">Got it</button>
+</div>
 <div class="wrap">
   <h1>Student Availability Tracker</h1>
 
@@ -263,6 +287,30 @@
     el.textContent = msg;
     el.className = 'pmsg' + (kind ? ' ' + kind : '');
   }
+  function showPopup(title, msg) {
+    document.getElementById('popTitle').textContent = title;
+    document.getElementById('popMsg').textContent = msg;
+    document.getElementById('pop').classList.add('on');
+    document.getElementById('popOk').focus();
+  }
+  document.getElementById('popOk').addEventListener('click', function () {
+    document.getElementById('pop').classList.remove('on');
+  });
+
+  // After a failed save, ask the Sheet what it really has, so the page never shows a wrong count
+  // and a coach is never told to tap again for a tap that actually saved.
+  function checkSheet(onData, onFail) {
+    callApi('getMyData', [DEVICE_ID, TEAM], function (data) {
+      if (!running && !queue.length) applyServer(data);
+      onData(data);
+    }, onFail);
+  }
+  function friendly(err) {
+    var m = err && err.message ? err.message : '';
+    return /Too many taps/.test(m) ? ' ' + m : '';
+  }
+  var OFFLINE = 'Your connection may be down. Refresh the page to see your saved counts before you tap again.';
+
   function markLast(choice) {
     CHOICES.forEach(function (c) { buttons[c].classList.toggle('last', c === choice); });
   }
@@ -373,11 +421,19 @@
     setStatus('Added: ' + choice, 'ok');
     if (SLOTS[choice]) openPanel(choice, tapId); else closePanel();
     enqueue('recordTap', [DEVICE_ID, TEAM, choice, tapId], null, function (err) {
-      counts[choice] = Math.max(0, (counts[choice] || 0) - 1);
-      recent = recent.filter(function (r) { return r !== entry; });
-      draw();
-      if (currentTap === tapId) closePanel();
-      setStatus('That ' + choice + ' tap didn’t save. Please tap + again.', 'err');
+      checkSheet(function (data) {
+        var landed = data.recent.some(function (r) { return r.tapId === tapId; });
+        if (landed) { setStatus('Added: ' + choice, 'ok'); return; }
+        if (currentTap === tapId) closePanel();
+        setStatus('Ready. Tap + after each student.', '');
+        showPopup('That tap didn\u2019t save', 'Your ' + choice + ' count went back to ' + (data.counts[choice] || 0) + '. Tap + again to add that student.' + friendly(err));
+      }, function () {
+        counts[choice] = Math.max(0, (counts[choice] || 0) - 1);
+        recent = recent.filter(function (r) { return r !== entry; });
+        draw();
+        if (currentTap === tapId) closePanel();
+        showPopup('That tap may not have saved', OFFLINE);
+      });
     });
   }
 
@@ -395,11 +451,17 @@
     setTimeout(function () { if (currentTap === tapId) closePanel(); }, 350);
     enqueue('addTime', [DEVICE_ID, TEAM, tapId, zone, h, m], function (data) {
       if (currentTap === tapId) setPanelMsg('Time added: ' + data.timeSaved, 'ok');
-    }, function () {
-      recent.forEach(function (r) { if (r.tapId === tapId) r.detail = ''; });
-      draw();
-      if (currentTap === tapId) setPanelMsg('That time didn’t save. Please choose it again.', 'err');
-      else setStatus('A time for ' + choice + ' didn’t save.', 'err');
+    }, function (err) {
+      checkSheet(function (data) {
+        var row = data.recent.filter(function (r) { return r.tapId === tapId; })[0];
+        if (!row || row.detail) return;
+        setStatus('Ready. Tap + after each student.', '');
+        showPopup('That time didn\u2019t save', 'The ' + choice + ' tap is saved, but not the time (' + label + '). If the student gave a time, tap \u2212 on ' + choice + ', then + and choose the time again.' + friendly(err));
+      }, function () {
+        recent.forEach(function (r) { if (r.tapId === tapId) r.detail = ''; });
+        draw();
+        showPopup('That time may not have saved', OFFLINE);
+      });
     });
   }
 
@@ -413,11 +475,18 @@
     draw();
     markLast(null);
     setStatus('Removed one: ' + choice, 'ok');
-    enqueue('removeOne', [DEVICE_ID, TEAM, choice], null, function () {
-      counts[choice] += 1;
-      if (removedEntry) recent.splice(idx, 0, removedEntry);
-      draw();
-      setStatus('Removing one ' + choice + ' didn’t save. Please tap − again.', 'err');
+    var expected = counts[choice];
+    enqueue('removeOne', [DEVICE_ID, TEAM, choice], null, function (err) {
+      checkSheet(function (data) {
+        if ((data.counts[choice] || 0) <= expected) { setStatus('Removed one: ' + choice, 'ok'); return; }
+        setStatus('Ready. Tap + after each student.', '');
+        showPopup('That didn\u2019t take one away', 'Your ' + choice + ' count is still ' + data.counts[choice] + '. Tap \u2212 again to take one away.' + friendly(err));
+      }, function () {
+        counts[choice] += 1;
+        if (removedEntry) recent.splice(idx, 0, removedEntry);
+        draw();
+        showPopup('That may not have taken one away', OFFLINE);
+      });
     });
   }
 
