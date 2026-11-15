@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Student Availability Tracker</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 40px;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f7f8fa; color: #1f2933;
+  }
+  .wrap { max-width: 580px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 6px; font-weight: 600; }
+  .teamrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .team {
+    display: inline-block; font-size: 26px; font-weight: 700; padding: 6px 20px;
+    border-radius: 999px; background: #1f2933; color: #fff; letter-spacing: .01em;
+  }
+  .switch { background: none; border: none; color: #52606d; font-size: 13px; text-decoration: underline; cursor: pointer; padding: 0; }
+  .chooser { background: #fff; border: 1px solid #dfe3e8; border-radius: 14px; padding: 20px; }
+  .chooser p { font-size: 18px; font-weight: 600; margin: 0 0 14px; }
+  .chooser button {
+    display: block; width: 100%; margin-bottom: 10px; padding: 18px; border-radius: 14px;
+    border: 2px solid #1f2933; background: #fff; font-size: 22px; font-weight: 700; cursor: pointer;
+  }
+  .chooser button:active { transform: scale(0.98); }
+  .note { font-size: 13px; color: #52606d; margin-bottom: 18px; }
+  .grid { display: grid; gap: 10px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button { font-family: inherit; }
+  .choice {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    width: 100%; padding: 12px 12px 12px 18px; border: 2px solid transparent; border-radius: 14px;
+    font-size: 18px; font-weight: 600; transition: border-color .15s;
+  }
+  .pair .choice { font-size: 15px; padding: 10px 10px 10px 14px; }
+  .choice.last { border-color: currentColor; }
+  .ctrl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .ctrl .count { margin-right: 4px; }
+  .count {
+    min-width: 46px; padding: 4px 10px; border-radius: 999px;
+    color: #fff; font-size: 17px; text-align: center;
+  }
+  .pm {
+    width: 44px; height: 44px; border-radius: 50%; border: 2px solid currentColor;
+    background: #fff; color: inherit; font-size: 24px; font-weight: 600; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+    transition: transform .08s;
+  }
+  .pair .pm { width: 38px; height: 38px; font-size: 21px; }
+  .pm:active:not(:disabled) { transform: scale(0.92); }
+  .pm.plus { color: #fff; border-color: transparent; }
+  .c0 .pm.plus { background: #d4537e; } .c1 .pm.plus { background: #378add; }
+  .c2 .pm.plus { background: #7f77dd; } .c3 .pm.plus { background: #1d9e75; }
+  .c4 .pm.plus { background: #639922; }
+  .c0 .pm.minus { border-color: #d4537e; color: #d4537e; } .c1 .pm.minus { border-color: #378add; color: #378add; }
+  .c2 .pm.minus { border-color: #7f77dd; color: #7f77dd; } .c3 .pm.minus { border-color: #1d9e75; color: #1d9e75; }
+  .c4 .pm.minus { border-color: #639922; color: #639922; }
+  .zsep { flex-basis: 100%; height: 0; }
+  .c0 { background: #fbeaf0; color: #72243e; } .c0 .count { background: #d4537e; }
+  .c1 { background: #e6f1fb; color: #0c447c; } .c1 .count { background: #378add; }
+  .c2 { background: #eeedfe; color: #3c3489; } .c2 .count { background: #7f77dd; }
+  .c3 { background: #e1f5ee; color: #085041; } .c3 .count { background: #1d9e75; }
+  .c4 { background: #eaf3de; color: #27500a; } .c4 .count { background: #639922; }
+  .status {
+    margin: 16px 0 8px; padding: 12px 14px; border-radius: 10px;
+    font-size: 15px; min-height: 46px; background: #e9ecf0;
+  }
+  .status.ok { background: #e3f6e8; color: #1e6b34; }
+  .status.err { background: #fde8e8; color: #9b1c1c; }
+  .panel {
+    display: none; background: #fff; border: 1px solid #dfe3e8; border-radius: 14px;
+    padding: 14px;
+  }
+  .panel.show { display: block; }
+  .pmsg { margin-top: 10px; font-size: 14px; border-radius: 8px; }
+  .pmsg:empty { display: none; }
+  .pmsg.ok { padding: 8px 10px; background: #e3f6e8; color: #1e6b34; }
+  .pmsg.err { padding: 8px 10px; background: #fde8e8; color: #9b1c1c; }
+  .panel h3 { font-size: 15px; margin: 0 0 10px; }
+  .slot.nospec { grid-column: span 2; border: 1.5px dashed #7b8794; color: #3e4c59; font-weight: 600; }
+  .panel p { font-size: 13px; color: #52606d; margin: 0 0 10px; }
+  .lbl { font-size: 12px; font-weight: 600; color: #52606d; margin: 10px 0 6px; text-transform: uppercase; letter-spacing: .03em; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill {
+    padding: 8px 12px; border-radius: 999px; border: 1px solid #cbd2d9; background: #fff;
+    font-size: 14px; cursor: pointer;
+  }
+  .pill.sel { background: #1f2933; color: #fff; border-color: #1f2933; }
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
+  .slot { padding: 9px 4px; border-radius: 10px; border: 1px solid #cbd2d9; background: #fff; font-size: 14px; cursor: pointer; }
+  .slot.sel { background: #1f2933; color: #fff; border-color: #1f2933; }
+  .other { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .other input { padding: 8px 10px; border: 1px solid #cbd2d9; border-radius: 10px; font-size: 14px; font-family: inherit; }
+  .other button { padding: 8px 14px; border-radius: 10px; border: 1px solid #1f2933; background: #1f2933; color: #fff; font-size: 14px; cursor: pointer; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .total { font-size: 16px; font-weight: 600; }
+  button.undo {
+    padding: 10px 16px; border-radius: 10px; border: 1px solid #9aa5b1;
+    background: #fff; font-size: 14px; cursor: pointer;
+  }
+  button.undo:disabled { opacity: .5; cursor: default; }
+  h2 { font-size: 15px; margin: 24px 0 8px; color: #3e4c59; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px;
+    background: #fff; border-radius: 10px; margin-bottom: 6px; font-size: 14px; border: 1px solid #eceff3;
+  }
+  li .d { display: block; font-size: 12px; color: #52606d; margin-top: 2px; }
+  li .t { color: #7b8794; white-space: nowrap; }
+  .empty { font-size: 14px; color: #7b8794; }
+  .missing { padding: 20px; background: #fff; border-radius: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Student Availability Tracker</h1>
+
+  <div class="chooser" id="chooser" style="display:none">
+    <p>Which team are you on?</p>
+    <button data-team="Recruitment">Recruitment</button>
+    <button data-team="Retention">Retention</button>
+  </div>
+
+  <div id="main" style="display:none">
+    <div class="teamrow"><span class="team" id="teamLabel"></span><button class="switch" id="switchTeam">Not your team? Switch</button></div>
+    <div class="note">Tap + once per student. Tap − to take one away. Your counts are saved and will be here when you come back.</div>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="status" id="status">Loading your counts…</div>
+
+    <div class="panel" id="panel">
+      <h3 id="panelTitle">Add a time</h3>
+      <p>Choose the student's time zone, then the time.</p>
+      <div class="lbl">Student's time zone</div>
+      <div class="pills" id="zones"></div>
+      <div class="lbl">Time (in the student's time zone)</div>
+      <div class="slots" id="slots"></div>
+      <div class="other">
+        <span style="font-size:14px;">Other time:</span>
+        <input type="time" id="otherTime">
+        <button id="otherSave">Save time</button>
+      </div>
+      <div class="pmsg" id="panelMsg"></div>
+    </div>
+
+    <div class="row">
+      <div class="total">Your total responses: <span id="total">0</span></div>
+    </div>
+
+    <h2>Your recent taps</h2>
+    <ul id="recent"><li class="empty">No taps yet.</li></ul>
+  </div>
+</div>
+
+<script>
+  var API_URL = 'https://script.google.com/macros/s/AKfycbyHxw1w_VPqAHoseN1rTyvoeXJvOOozIQFgF7QF3EiHOAuPntsi75HKgQqZ0mUyhz7F/exec';
+  var INIT_TEAM = (function () {
+    var m = /[?&]team=([^&#]*)/i.exec(location.search);
+    var v = m ? decodeURIComponent(m[1]).trim().toLowerCase() : '';
+    return v === 'recruitment' ? 'Recruitment' : v === 'retention' ? 'Retention' : '';
+  })();
+  var TEAM = null;
+  var CHOICES = ['Early Morning', 'During the Day', 'Late Evening', 'No Preference', 'Asked \u2013 Student Did Not Provide an Answer'];
+  var ZONES = [['ET','Eastern Time'],['CT','Central Time'],['MT','Mountain Time'],['PT','Pacific Time'],null,['AK','Alaska Time'],['HI','Hawaii Time'],['AZ','Arizona']];
+  var SLOTS = {
+    'Early Morning': range(6, 0, 8, 30),
+    'During the Day': range(9, 0, 16, 30),
+    'Late Evening': range(17, 0, 19, 30)
+  };
+  var NOSPEC = {
+    'Early Morning': 'No specific morning time',
+    'During the Day': 'No specific time during the day',
+    'Late Evening': 'No specific evening time'
+  };
+  var currentTap = null, currentChoice = null, selectedZone = null;
+  var counts = {}, recent = [];
+  var queue = [], running = false;
+
+  function range(h1, m1, h2, m2) {
+    var out = [], t = h1 * 60 + m1, end = h2 * 60 + m2;
+    for (; t <= end; t += 30) out.push([Math.floor(t / 60), t % 60]);
+    return out;
+  }
+  function fmt(h, m) {
+    var ap = h < 12 ? 'AM' : 'PM', hh = h % 12 === 0 ? 12 : h % 12;
+    return hh + ':' + (m < 10 ? '0' : '') + m + ' ' + ap;
+  }
+  function nowLabel() {
+    var d = new Date(), mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return mo[d.getMonth()] + ' ' + d.getDate() + ', ' + fmt(d.getHours(), d.getMinutes());
+  }
+  function makeId(n) {
+    var s = '', chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    for (var i = 0; i < (n || 24); i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+
+  var DEVICE_ID = null, storageOk = true;
+  try {
+    DEVICE_ID = localStorage.getItem('sat_device_id');
+    if (!DEVICE_ID) { DEVICE_ID = makeId(); localStorage.setItem('sat_device_id', DEVICE_ID); }
+  } catch (e) { storageOk = false; DEVICE_ID = makeId(); }
+
+  var grid = document.getElementById('grid');
+  var buttons = {};
+  function makeButton(c, i) {
+    var row = document.createElement('div');
+    row.className = 'choice c' + i;
+    row.innerHTML = '<span class="name"></span><span class="ctrl">' +
+      '<span class="count">0</span>' +
+      '<button class="pm plus">+</button>' +
+      '<button class="pm minus">−</button></span>';
+    row.querySelector('.name').textContent = c;
+    row.querySelector('.plus').setAttribute('aria-label', 'Add one ' + c);
+    row.querySelector('.minus').setAttribute('aria-label', 'Remove one ' + c);
+    row.querySelector('.plus').addEventListener('click', function () { tap(c); });
+    row.querySelector('.minus').addEventListener('click', function () { removeOne(c); });
+    buttons[c] = row;
+    return row;
+  }
+  for (var i = 0; i < 3; i++) grid.appendChild(makeButton(CHOICES[i], i));
+  var pair = document.createElement('div');
+  pair.className = 'pair';
+  pair.appendChild(makeButton(CHOICES[3], 3));
+  pair.appendChild(makeButton(CHOICES[4], 4));
+  grid.appendChild(pair);
+
+  var zonesEl = document.getElementById('zones');
+  ZONES.forEach(function (z) {
+    if (!z) { var sep = document.createElement('span'); sep.className = 'zsep'; zonesEl.appendChild(sep); return; }
+    var p = document.createElement('button');
+    p.className = 'pill';
+    p.textContent = z[1];
+    p.addEventListener('click', function () {
+      selectedZone = z[0];
+      [].forEach.call(zonesEl.querySelectorAll('.pill'), function (c) { c.classList.remove('sel'); });
+      p.classList.add('sel');
+    });
+    zonesEl.appendChild(p);
+  });
+  function zoneLabel(key) { for (var i = 0; i < ZONES.length; i++) if (ZONES[i] && ZONES[i][0] === key) return ZONES[i][1]; return ''; }
+
+  var statusEl = document.getElementById('status');
+  var panel = document.getElementById('panel');
+  var slotsEl = document.getElementById('slots');
+  document.getElementById('otherSave').addEventListener('click', function () {
+    var v = document.getElementById('otherTime').value;
+    if (!v) { setPanelMsg('Enter the other time first.', 'err'); return; }
+    var p = v.split(':');
+    saveTime(Number(p[0]), Number(p[1]), null);
+  });
+
+  function setStatus(msg, kind) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
+  function setPanelMsg(msg, kind) {
+    var el = document.getElementById('panelMsg');
+    el.textContent = msg;
+    el.className = 'pmsg' + (kind ? ' ' + kind : '');
+  }
+  function markLast(choice) {
+    CHOICES.forEach(function (c) { buttons[c].classList.toggle('last', c === choice); });
+  }
+
+  // Talks to the Google Apps Script save service. No Google sign-in is involved.
+  function callApi(action, args, onOk, onErr) {
+    fetch(API_URL, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: action, args: args })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.ok) onOk(res.data); else onErr(new Error(res && res.error ? res.error : 'Save failed'));
+      })
+      .catch(function (err) { onErr(err); });
+  }
+
+  // Requests run one at a time, in order, in the background.
+  function enqueue(fn, args, onOk, onErr) {
+    queue.push({ fn: fn, args: args, ok: onOk, err: onErr });
+    pump();
+  }
+  function pump() {
+    if (running || !queue.length) return;
+    running = true;
+    var job = queue.shift();
+    callApi(job.fn, job.args, function (data) {
+      running = false;
+      if (job.ok) job.ok(data);
+      if (!queue.length && data && data.counts) { applyServer(data); }
+      pump();
+    }, function (err) {
+      running = false;
+      if (job.err) job.err(err);
+      pump();
+    });
+  }
+  window.addEventListener('beforeunload', function (e) {
+    if (running || queue.length) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  function applyServer(data) {
+    CHOICES.forEach(function (c) { counts[c] = data.counts[c] || 0; });
+    recent = data.recent.map(function (r) { return { tapId: r.tapId, choice: r.choice, detail: r.detail, time: r.time }; });
+    draw();
+  }
+
+  function draw() {
+    var total = 0;
+    CHOICES.forEach(function (c) {
+      var n = counts[c] || 0;
+      total += n;
+      buttons[c].querySelector('.count').textContent = n;
+    });
+    document.getElementById('total').textContent = total;
+    var ul = document.getElementById('recent');
+    ul.innerHTML = '';
+    if (!recent.length) { ul.innerHTML = '<li class="empty">No taps yet.</li>'; return; }
+    recent.slice(0, 5).forEach(function (r) {
+      var li = document.createElement('li');
+      var left = document.createElement('span');
+      left.textContent = r.choice;
+      if (r.detail) { var d = document.createElement('span'); d.className = 'd'; d.textContent = r.detail; left.appendChild(d); }
+      var t = document.createElement('span'); t.className = 't'; t.textContent = r.time;
+      li.appendChild(left); li.appendChild(t);
+      ul.appendChild(li);
+    });
+  }
+
+  function openPanel(choice, tapId) {
+    currentTap = tapId;
+    currentChoice = choice;
+    document.getElementById('panelTitle').textContent = 'Add a time for ' + choice;
+    document.getElementById('otherTime').value = '';
+    selectedZone = null;
+    setPanelMsg('', '');
+    [].forEach.call(zonesEl.querySelectorAll('.pill'), function (c) { c.classList.remove('sel'); });
+    slotsEl.innerHTML = '';
+    SLOTS[choice].forEach(function (s) {
+      var b = document.createElement('button');
+      b.className = 'slot';
+      b.textContent = fmt(s[0], s[1]);
+      b.addEventListener('click', function () { saveTime(s[0], s[1], b); });
+      slotsEl.appendChild(b);
+    });
+    var ns = document.createElement('button');
+    ns.className = 'slot nospec';
+    ns.textContent = NOSPEC[choice];
+    ns.addEventListener('click', function () {
+      closePanel();
+      setStatus('Added: ' + choice + ' (no specific time)', 'ok');
+    });
+    slotsEl.appendChild(ns);
+    buttons[choice].insertAdjacentElement('afterend', panel);
+    panel.classList.add('show');
+  }
+  function closePanel() { panel.classList.remove('show'); currentTap = null; currentChoice = null; }
+
+  function tap(choice) {
+    var tapId = 't-' + makeId(20);
+    counts[choice] = (counts[choice] || 0) + 1;
+    var entry = { tapId: tapId, choice: choice, detail: '', time: nowLabel() };
+    recent.unshift(entry);
+    draw();
+    markLast(choice);
+    setStatus('Added: ' + choice, 'ok');
+    if (SLOTS[choice]) openPanel(choice, tapId); else closePanel();
+    enqueue('recordTap', [DEVICE_ID, TEAM, choice, tapId], null, function (err) {
+      counts[choice] = Math.max(0, (counts[choice] || 0) - 1);
+      recent = recent.filter(function (r) { return r !== entry; });
+      draw();
+      if (currentTap === tapId) closePanel();
+      setStatus('That ' + choice + ' tap didn’t save. Please tap + again.', 'err');
+    });
+  }
+
+  function saveTime(h, m, btn) {
+    if (!currentTap) return;
+    if (!selectedZone) { setPanelMsg('Choose the student’s time zone first, then the time.', 'err'); return; }
+    var tapId = currentTap, choice = currentChoice, zone = selectedZone;
+    [].forEach.call(slotsEl.children, function (c) { c.classList.remove('sel'); });
+    if (btn) btn.classList.add('sel');
+    var label = fmt(h, m) + ' ' + zoneLabel(zone);
+    recent.forEach(function (r) { if (r.tapId === tapId) r.detail = label; });
+    draw();
+    setPanelMsg('Time added: ' + label, 'ok');
+    setStatus('Added: ' + choice + ' · ' + label, 'ok');
+    setTimeout(function () { if (currentTap === tapId) closePanel(); }, 350);
+    enqueue('addTime', [DEVICE_ID, TEAM, tapId, zone, h, m], function (data) {
+      if (currentTap === tapId) setPanelMsg('Time added: ' + data.timeSaved, 'ok');
+    }, function () {
+      recent.forEach(function (r) { if (r.tapId === tapId) r.detail = ''; });
+      draw();
+      if (currentTap === tapId) setPanelMsg('That time didn’t save. Please choose it again.', 'err');
+      else setStatus('A time for ' + choice + ' didn’t save.', 'err');
+    });
+  }
+
+  function removeOne(choice) {
+    if (!(counts[choice] > 0)) { setStatus('There’s nothing to take away from ' + choice + '.', ''); return; }
+    closePanel();
+    counts[choice] -= 1;
+    var idx = -1;
+    for (var i = 0; i < recent.length; i++) if (recent[i].choice === choice) { idx = i; break; }
+    var removedEntry = idx >= 0 ? recent.splice(idx, 1)[0] : null;
+    draw();
+    markLast(null);
+    setStatus('Removed one: ' + choice, 'ok');
+    enqueue('removeOne', [DEVICE_ID, TEAM, choice], null, function () {
+      counts[choice] += 1;
+      if (removedEntry) recent.splice(idx, 0, removedEntry);
+      draw();
+      setStatus('Removing one ' + choice + ' didn’t save. Please tap − again.', 'err');
+    });
+  }
+
+  function loadCounts() {
+    counts = {}; recent = [];
+    draw();
+    setStatus('Loading your counts\u2026');
+    var forTeam = TEAM;
+    callApi('getMyData', [DEVICE_ID, TEAM], function (data) {
+      if (forTeam !== TEAM) return;
+      if (!running && !queue.length) applyServer(data);
+      setStatus(storageOk ? 'Ready. Tap + after each student.' :
+        'Ready. Note: this browser blocks saved settings, so your counts will start over if you close this page.', storageOk ? '' : 'err');
+    }, function () { setStatus('Couldn\u2019t load your counts. Please refresh the page.', 'err'); });
+  }
+
+  function useTeam(t) {
+    TEAM = t;
+    try { localStorage.setItem('sat_team', t); } catch (e) {}
+    document.getElementById('teamLabel').textContent = t;
+    document.getElementById('chooser').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+    closePanel();
+    loadCounts();
+  }
+  function showChooser() {
+    document.getElementById('main').style.display = 'none';
+    document.getElementById('chooser').style.display = 'block';
+  }
+  [].forEach.call(document.querySelectorAll('#chooser button'), function (b) {
+    b.addEventListener('click', function () { useTeam(b.getAttribute('data-team')); });
+  });
+  document.getElementById('switchTeam').addEventListener('click', function () {
+    if (running || queue.length) { setStatus('Still saving your last tap. Try again in a moment.', 'err'); return; }
+    showChooser();
+  });
+
+  var storedTeam = null;
+  try { storedTeam = localStorage.getItem('sat_team'); } catch (e) {}
+  if (INIT_TEAM) useTeam(INIT_TEAM);
+  else if (storedTeam === 'Recruitment' || storedTeam === 'Retention') useTeam(storedTeam);
+  else showChooser();
+</script>
+</body>
+</html>
