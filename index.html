@@ -200,7 +200,7 @@
     'During the Day': 'No specific time during the day',
     'Late Evening': 'No specific evening time'
   };
-  var currentTap = null, currentChoice = null, selectedZone = null;
+  var currentTap = null, currentChoice = null, selectedZone = null, pendingTime = null;
   var counts = {}, recent = [];
   var queue = [], running = false;
 
@@ -263,6 +263,7 @@
       selectedZone = z[0];
       [].forEach.call(zonesEl.querySelectorAll('.pill'), function (c) { c.classList.remove('sel'); });
       p.classList.add('sel');
+      if (pendingTime && currentTap) saveTime(pendingTime[0], pendingTime[1], pendingTime[2]);
     });
     zonesEl.appendChild(p);
   });
@@ -388,6 +389,7 @@
     document.getElementById('panelTitle').textContent = 'Add a time for ' + choice;
     document.getElementById('otherTime').value = '';
     selectedZone = null;
+    pendingTime = null;
     setPanelMsg('', '');
     [].forEach.call(zonesEl.querySelectorAll('.pill'), function (c) { c.classList.remove('sel'); });
     slotsEl.innerHTML = '';
@@ -439,10 +441,12 @@
 
   function saveTime(h, m, btn) {
     if (!currentTap) return;
-    if (!selectedZone) { setPanelMsg('Choose the student’s time zone first, then the time.', 'err'); return; }
-    var tapId = currentTap, choice = currentChoice, zone = selectedZone;
     [].forEach.call(slotsEl.children, function (c) { c.classList.remove('sel'); });
     if (btn) btn.classList.add('sel');
+    // Time picked before the time zone: keep it highlighted and save once a zone is chosen.
+    if (!selectedZone) { pendingTime = [h, m, btn]; return; }
+    pendingTime = null;
+    var tapId = currentTap, choice = currentChoice, zone = selectedZone;
     var label = fmt(h, m) + ' ' + zoneLabel(zone);
     recent.forEach(function (r) { if (r.tapId === tapId) r.detail = label; });
     draw();
